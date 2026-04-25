@@ -1,0 +1,55 @@
+# Data Processing and Analysis
+pandas==2.1.3
+numpy==1.24.3
+scipy==1.11.4
+
+# Machine Learning and Clustering
+scikit-learn==1.3.2
+scikit-preprocessing==0.28.0
+
+# API Framework
+fastapi==0.104.1
+uvicorn==0.24.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Database
+sqlalchemy==2.0.23
+alembic==1.12.1
+
+# Data Validation and Serialization
+python-multipart==0.0.6
+python-dotenv==1.0.0
+
+# Visualization
+matplotlib==3.8.2
+seaborn==0.13.0
+plotly==5.18.0
+
+# Jupyter Notebook Support
+jupyter==1.0.0
+ipython==8.18.1
+notebook==7.0.6
+
+# Data Export
+openpyxl==3.1.2
+xlsxwriter==3.1.8
+
+# AI/LLM Integration (Optional)
+openai==1.3.8
+anthropic==0.7.8
+
+# Utilities
+requests==2.31.0
+python-dateutil==2.8.2
+
+# Development and Testing
+pytest==7.4.3
+pytest-cov==4.1.0
+black==23.12.0
+flake8==6.1.0
+isort==5.13.2
+
+# Documentation
+sphinx==7.2.6
+sphinx-rtd-theme==2.0.0
