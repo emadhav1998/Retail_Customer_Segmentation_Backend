@@ -1,0 +1,55 @@
+# Dataset Column Requirements for Retail Customer Segmentation
+# ============================================================
+# This file defines the required and optional columns for the retail dataset
+# used in customer segmentation analysis (RFM - Recency, Frequency, Monetary)
+
+# Required Columns (Must be present in the dataset)
+# -------------------------------------------------
+InvoiceNo        : Invoice number (unique identifier for each transaction)
+StockCode        : Product/item code
+Description      : Product description/name
+Quantity         : Number of items purchased
+InvoiceDate      : Date and time of the invoice (YYYY-MM-DD or similar format)
+UnitPrice        : Price per unit of the product
+CustomerID       : Unique customer identifier (critical for segmentation)
+Country          : Customer's country
+
+# Optional Columns (Enhance analysis but not required)
+# ----------------------------------------------------
+ProductCategory  : Category of the product (e.g., Electronics, Clothing)
+ProductGroup     : Grouping of similar products
+Discount         : Discount applied to the transaction
+ShippingCost     : Cost of shipping for the order
+InvoiceMonth     : Month extracted from InvoiceDate
+InvoiceYear      : Year extracted from InvoiceDate
+
+# Data Types
+# ----------
+InvoiceNo        : String (can contain leading zeros)
+StockCode        : String (alphanumeric)
+Description      : String
+Quantity         : Integer (positive for sales, negative for returns)
+InvoiceDate      : Datetime (YYYY-MM-DD HH:MM:SS)
+UnitPrice        : Float (positive values)
+CustomerID       : String or Integer (unique customer identifier)
+Country          : String (country name)
+
+# Example Data Format (CSV)
+# -------------------------
+# InvoiceNo,StockCode,Description,Quantity,InvoiceDate,UnitPrice,CustomerID,Country
+# 536365,85123A,WHITE HANGING HEART T-LIGHT HOLDER,6,2010-12-01 08:26:00,2.55,17850,United Kingdom
+# 536366,71053,WHITE METAL LANTERN,6,2010-12-01 08:28:00,3.39,17850,United Kingdom
+
+# Notes
+# -----
+# 1. CustomerID is critical - without it, customer-level segmentation is not possible
+# 2. Quantity should be positive for purchases; negative values indicate returns
+# 3. InvoiceDate is used to calculate Recency (days since last purchase)
+# 4. UnitPrice * Quantity gives the monetary value per line item
+# 5. Multiple rows with same InvoiceNo belong to the same transaction
+
+# RFM Calculation Reference
+# -------------------------
+# Recency   : Days since last purchase (lower is better)
+# Frequency : Number of unique transactions (higher is better)
+# Monetary  : Total amount spent (higher is better)

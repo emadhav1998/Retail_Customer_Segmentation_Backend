@@ -4,7 +4,7 @@ File service for handling dataset uploads and validation
 import os
 import uuid
 from datetime import datetime
-from typing import Optional, Tuple
+from typing import Optional, Tuple, List
 from fastapi import UploadFile
 from app.core.config import settings
 
@@ -19,7 +19,7 @@ class FileService:
     @staticmethod
     def validate_upload(file: UploadFile) -> Tuple[bool, Optional[str]]:
         """
-        Validate uploaded file.
+        Step 1: Validate uploaded file extension and basic properties.
         
         Args:
             file: FastAPI UploadFile object
@@ -27,6 +27,10 @@ class FileService:
         Returns:
             Tuple of (is_valid, error_message)
         """
+        # Check if filename exists
+        if not file.filename:
+            return False, "No file name provided"
+        
         # Check file extension
         file_ext = os.path.splitext(file.filename)[1].lower()
         if file_ext not in FileService.ALLOWED_EXTENSIONS:
@@ -35,6 +39,39 @@ class FileService:
         # Check file size (read first chunk to estimate)
         # Note: In production, implement proper size checking
         return True, None
+    
+    @staticmethod
+    def validate_file_extension(filename: str) -> Tuple[bool, Optional[str]]:
+        """
+        Step 2: Validate file extension specifically.
+        
+        Args:
+            filename: Name of the file
+            
+        Returns:
+            Tuple of (is_valid, error_message)
+        """
+        file_ext = os.path.splitext(filename)[1].lower()
+        
+        if not file_ext:
+            return False, "No file extension found"
+        
+        if file_ext not in FileService.ALLOWED_EXTENSIONS:
+            return False, f"File extension '{file_ext}' not supported. Allowed: {', '.join(FileService.ALLOWED_EXTENSIONS)}"
+        
+        return True, None
+    
+    @staticmethod
+    def ensure_upload_directory() -> str:
+        """
+        Step 3: Ensure upload directory exists, create if not.
+        
+        Returns:
+            Path to the upload directory
+        """
+        upload_dir = settings.raw_data_path
+        os.makedirs(upload_dir, exist_ok=True)
+        return upload_dir
     
     @staticmethod
     def generate_save_path(original_filename: str) -> Tuple[str, str]:
@@ -47,6 +84,9 @@ class FileService:
         Returns:
             Tuple of (file_path, file_name)
         """
+        # Ensure upload directory exists
+        FileService.ensure_upload_directory()
+        
         # Generate unique filename with timestamp
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         unique_id = str(uuid.uuid4())[:8]
@@ -55,7 +95,6 @@ class FileService:
         
         # Create full path
         save_dir = settings.raw_data_path
-        os.makedirs(save_dir, exist_ok=True)
         file_path = os.path.join(save_dir, new_filename)
         
         return file_path, new_filename
@@ -89,6 +128,7 @@ class FileService:
             True if successful, False otherwise
         """
         try:
+            # Ensure directory exists
             os.makedirs(os.path.dirname(save_path), exist_ok=True)
             
             with open(save_path, "wb") as f:

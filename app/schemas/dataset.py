@@ -3,7 +3,7 @@ Dataset schemas for request/response validation
 """
 from pydantic import BaseModel, Field
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from app.models.dataset import DatasetStatus, DatasetSourceType
 
 
@@ -46,3 +46,35 @@ class DatasetListResponse(BaseModel):
     """Schema for listing datasets"""
     datasets: list[DatasetResponse]
     total: int
+
+
+class DatasetUploadRequest(BaseModel):
+    """Schema for dataset upload request"""
+    source_type: DatasetSourceType = Field(default=DatasetSourceType.UPLOAD, description="Source type of the dataset")
+
+
+class DatasetUploadResponse(BaseModel):
+    """Schema for dataset upload response"""
+    id: int
+    file_name: str
+    original_file_name: str
+    row_count: int
+    status: DatasetStatus
+    message: str = "Dataset uploaded successfully"
+
+
+class DatasetDetailResponse(DatasetResponse):
+    """Schema for detailed dataset view"""
+    file_size: Optional[int] = Field(None, description="File size in bytes")
+    columns: Optional[List[str]] = Field(None, description="List of column names")
+    
+    class Config:
+        from_attributes = True
+
+
+class DatasetValidationResult(BaseModel):
+    """Schema for dataset validation result"""
+    is_valid: bool
+    errors: List[str] = Field(default_factory=list)
+    warnings: List[str] = Field(default_factory=list)
+    column_mapping: Optional[dict] = None
