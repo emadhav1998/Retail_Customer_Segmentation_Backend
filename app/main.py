@@ -8,6 +8,7 @@ from app.api.routes import (
     health_router,
     dataset_router,
     exploration_router,
+    cleaning_router,
     segmentation_router,
     dashboard_router,
     insights_router
@@ -37,6 +38,7 @@ app.add_middleware(
 app.include_router(health_router, prefix=settings.api_v1_prefix)
 app.include_router(dataset_router, prefix=settings.api_v1_prefix)
 app.include_router(exploration_router, prefix=settings.api_v1_prefix)
+app.include_router(cleaning_router, prefix=settings.api_v1_prefix)
 app.include_router(segmentation_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(insights_router, prefix=settings.api_v1_prefix)
