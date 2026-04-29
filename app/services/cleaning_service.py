@@ -102,6 +102,91 @@ class CleaningService:
             return False, error_msg, None
     
     @staticmethod
+    def run_cleaning_step2(
+        db: Session,
+        dataset_id: int,
+        job_id: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Run cleaning step 2 for a dataset.
+        
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset to clean
+            job_id: Optional job ID for tracking
+            
+        Returns:
+            Tuple of (success, message, summary_dict)
+        """
+        # Get dataset
+        dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+        
+        if not dataset:
+            return False, f"Dataset with ID {dataset_id} not found", None
+        
+        # Get the cleaned_step1.csv file path
+        output_dir = settings.processed_data_path
+        input_file = os.path.join(output_dir, 'cleaned_step1.csv')
+        
+        if not os.path.exists(input_file):
+            return False, f"Cleaned step 1 file not found. Please run cleaning step 1 first.", None
+        
+        try:
+            # Import and run cleaning script
+            from scripts.preprocessing.clean_data_step2 import run_cleaning_step2
+            
+            # Update job status if provided
+            if job_id:
+                CleaningService._update_job_status(db, job_id, JobStatus.IN_PROGRESS, 10, "Starting cleaning step 2...")
+            
+            # Run cleaning
+            success, message, summary = run_cleaning_step2(
+                input_file=input_file,
+                output_dir=output_dir,
+                save_summary=True
+            )
+            
+            if success and summary:
+                # Update job progress
+                if job_id:
+                    CleaningService._update_job_status(db, job_id, JobStatus.IN_PROGRESS, 90, "Saving output metadata...")
+                
+                # Store output metadata
+                CleaningService._store_final_output_metadata(
+                    db=db,
+                    dataset_id=dataset_id,
+                    job_id=job_id,
+                    output_file=summary.get('output_file'),
+                    summary=summary
+                )
+                
+                # Update job completion
+                if job_id:
+                    CleaningService._update_job_status(
+                        db, job_id, JobStatus.COMPLETED, 100, 
+                        "Cleaning step 2 completed successfully"
+                    )
+                
+                return True, message, summary
+            else:
+                if job_id:
+                    CleaningService._update_job_status(
+                        db, job_id, JobStatus.FAILED, 0, 
+                        f"Cleaning failed: {message}"
+                    )
+                return False, message, None
+                
+        except Exception as e:
+            error_msg = f"Error during cleaning: {str(e)}"
+            
+            if job_id:
+                CleaningService._update_job_status(
+                    db, job_id, JobStatus.FAILED, 0, error_msg
+                )
+            
+            return False, error_msg, None
+    
+    @staticmethod
     def _update_job_status(
         db: Session,
         job_id: int,
@@ -143,6 +228,22 @@ class CleaningService:
             db.commit()
     
     @staticmethod
+    def _store_final_output_metadata(
+        db: Session,
+        dataset_id: int,
+        job_id: Optional[int],
+        output_file: str,
+        summary: Dict[str, Any]
+    ) -> None:
+        """Store final cleaning output metadata in dataset record."""
+        dataset = db.query(Dataset).filter(Dataset.id == dataset_id).first()
+        if dataset:
+            # Update dataset status to indicate final cleaning is complete
+            dataset.status = DatasetStatus.PROCESSED
+            dataset.processed_at = datetime.now()
+            db.commit()
+    
+    @staticmethod
     def get_cleaning_output_metadata(
         db: Session,
         dataset_id: int
@@ -165,6 +266,36 @@ class CleaningService:
         # Look for cleaning summary file
         output_dir = settings.processed_data_path
         summary_file = os.path.join(output_dir, 'cleaning_step1_summary.json')
+        
+        if os.path.exists(summary_file):
+            with open(summary_file, 'r') as f:
+                return json.load(f)
+        
+        return None
+    
+    @staticmethod
+    def get_cleaning_step2_metadata(
+        db: Session,
+        dataset_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Get cleaning step 2 output metadata for a dataset.
+        
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset
+            
+        Returns:
+            Dictionary with metadata or None
+        """
+        dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+        
+        if not dataset:
+            return None
+        
+        # Look for cleaning step 2 summary file
+        output_dir = settings.processed_data_path
+        summary_file = os.path.join(output_dir, 'cleaning_step2_summary.json')
         
         if os.path.exists(summary_file):
             with open(summary_file, 'r') as f:

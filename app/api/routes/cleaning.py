@@ -99,6 +99,137 @@ async def start_cleaning(
         )
 
 
+@router.post(
+    "/start-step2",
+    response_model=CleaningResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Start data cleaning step 2",
+    description="Trigger cleaning step 2 for a dataset (requires step 1 completion)"
+)
+async def start_cleaning_step2(
+    dataset_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Start data cleaning step 2 process for a dataset.
+    
+    - **dataset_id**: ID of the dataset to clean
+    """
+    # Validate dataset exists
+    dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+    
+    if not dataset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset with ID {dataset_id} not found"
+        )
+    
+    # Check if step 1 has been completed
+    import os
+    output_dir = settings.processed_data_path
+    step1_file = os.path.join(output_dir, 'cleaned_step1.csv')
+    
+    if not os.path.exists(step1_file):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Cleaning step 1 must be completed before running step 2"
+        )
+    
+    try:
+        # Create a job for tracking
+        job = Job(
+            name="Cleaning Step 2",
+            stage=JobStage.PREPROCESSING,
+            status=JobStatus.PENDING,
+            dataset_id=dataset.id,
+            started_at=datetime.now()
+        )
+        db.add(job)
+        db.commit()
+        db.refresh(job)
+        
+        # Run cleaning step 2
+        success, message, summary = CleaningService.run_cleaning_step2(
+            db=db,
+            dataset_id=dataset.id,
+            job_id=job.id
+        )
+        
+        if success:
+            return CleaningResponse(
+                success=True,
+                message=message,
+                job_id=job.id
+            )
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=message
+            )
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error starting cleaning step 2: {str(e)}"
+        )
+
+
+@router.get(
+    "/metadata-step2/{dataset_id}",
+    response_model=CleaningSummaryResponse,
+    summary="Get cleaning step 2 output metadata",
+    description="Fetch cleaning step 2 output metadata for a dataset"
+)
+async def get_cleaning_step2_metadata(
+    dataset_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get cleaning step 2 metadata for a dataset.
+    
+    - **dataset_id**: ID of the dataset
+    """
+    # Validate dataset exists
+    dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+    
+    if not dataset:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Dataset with ID {dataset_id} not found"
+        )
+    
+    # Get cleaning step 2 metadata
+    metadata = CleaningService.get_cleaning_step2_metadata(db, dataset_id)
+    
+    if not metadata:
+        return CleaningSummaryResponse(
+            success=False,
+            message="No cleaning step 2 metadata found for this dataset"
+        )
+    
+    return CleaningSummaryResponse(
+        success=True,
+        message="Cleaning step 2 metadata retrieved successfully",
+        data=CleaningMetadataResponse(
+            dataset_id=dataset_id,
+            step=metadata.get('step', 'step2'),
+            input_file=metadata.get('input_file', ''),
+            output_file=metadata.get('output_file', ''),
+            initial_rows=metadata.get('initial_rows', 0),
+            final_rows=metadata.get('final_rows', 0),
+            total_rows_removed=metadata.get('total_rows_removed', 0),
+            removal_percentage=metadata.get('removal_percentage', 0),
+            duplicate_stats=metadata.get('quantity_stats', {}),
+            customerid_stats=metadata.get('price_stats', {}),
+            columns=metadata.get('columns', []),
+            column_count=metadata.get('column_count', 0),
+            timestamp=metadata.get('timestamp', '')
+        )
+    )
+
+
 @router.get(
     "/metadata/{dataset_id}",
     response_model=CleaningSummaryResponse,
