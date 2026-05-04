@@ -242,3 +242,174 @@ class RFMService:
         
         except Exception as e:
             return None
+
+    # ------------------------------------------------------------------
+    # RFM Base (Frequency + Monetary + merge)
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def build_rfm_base(
+        db: Session,
+        dataset_id: int,
+        job_id: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Build the RFM base by calculating frequency and monetary metrics
+        and merging with recency data.
+
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset
+            job_id: Optional job ID for tracking
+
+        Returns:
+            Tuple of (success, message, summary_dict)
+        """
+        dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+        if not dataset:
+            return False, f"Dataset with ID {dataset_id} not found", None
+
+        output_dir = settings.processed_data_path
+        input_file = os.path.join(output_dir, 'cleaned_final.csv')
+        recency_file = os.path.join(output_dir, 'rfm_recency.csv')
+
+        if not os.path.exists(input_file):
+            return False, "cleaned_final.csv not found. Please complete cleaning step 2 first.", None
+        if not os.path.exists(recency_file):
+            return False, "rfm_recency.csv not found. Please run recency calculation first.", None
+
+        try:
+            from scripts.segmentation.build_rfm_base import run_build_rfm_base
+
+            if job_id:
+                RFMService._update_job_status(db, job_id, JobStatus.IN_PROGRESS, 10, "Building RFM base...")
+
+            success, message, summary = run_build_rfm_base(
+                input_file=input_file,
+                output_dir=output_dir,
+                recency_file=recency_file,
+                save_summary=True
+            )
+
+            if success and summary:
+                if job_id:
+                    RFMService._update_job_status(db, job_id, JobStatus.COMPLETED, 100, "RFM base built successfully.")
+                return True, message, summary
+            else:
+                if job_id:
+                    RFMService._update_job_status(db, job_id, JobStatus.FAILED, 0, f"RFM base failed: {message}")
+                return False, message, None
+
+        except Exception as e:
+            error_msg = f"Error building RFM base: {str(e)}"
+            if job_id:
+                RFMService._update_job_status(db, job_id, JobStatus.FAILED, 0, error_msg)
+            return False, error_msg, None
+
+    @staticmethod
+    def get_rfm_base_preview(
+        db: Session,
+        dataset_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Return rfm_base_summary.json metadata if available."""
+        if not DatasetService.get_dataset_by_id(db, dataset_id):
+            return None
+        summary_file = os.path.join(settings.processed_data_path, 'rfm_base_summary.json')
+        if os.path.exists(summary_file):
+            with open(summary_file, 'r') as f:
+                return json.load(f)
+        return None
+
+    # ------------------------------------------------------------------
+    # RFM Scoring
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def score_rfm(
+        db: Session,
+        dataset_id: int,
+        job_id: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Assign R, F, M scores (1–5) using quintile binning and compute
+        the combined RFM score.
+
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset
+            job_id: Optional job ID for tracking
+
+        Returns:
+            Tuple of (success, message, summary_dict)
+        """
+        dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+        if not dataset:
+            return False, f"Dataset with ID {dataset_id} not found", None
+
+        output_dir = settings.processed_data_path
+        rfm_base_file = os.path.join(output_dir, 'rfm_base.csv')
+
+        if not os.path.exists(rfm_base_file):
+            return False, "rfm_base.csv not found. Please build the RFM base first.", None
+
+        try:
+            from scripts.segmentation.rfm_scoring import run_rfm_scoring
+
+            if job_id:
+                RFMService._update_job_status(db, job_id, JobStatus.IN_PROGRESS, 10, "Scoring RFM dimensions...")
+
+            success, message, summary = run_rfm_scoring(
+                input_file=rfm_base_file,
+                output_dir=output_dir,
+                save_summary=True
+            )
+
+            if success and summary:
+                if job_id:
+                    RFMService._update_job_status(db, job_id, JobStatus.COMPLETED, 100, "RFM scoring completed successfully.")
+                return True, message, summary
+            else:
+                if job_id:
+                    RFMService._update_job_status(db, job_id, JobStatus.FAILED, 0, f"RFM scoring failed: {message}")
+                return False, message, None
+
+        except Exception as e:
+            error_msg = f"Error during RFM scoring: {str(e)}"
+            if job_id:
+                RFMService._update_job_status(db, job_id, JobStatus.FAILED, 0, error_msg)
+            return False, error_msg, None
+
+    @staticmethod
+    def get_rfm_scores_preview(
+        db: Session,
+        dataset_id: int,
+        limit: Optional[int] = None
+    ) -> Optional[list]:
+        """Return a preview of rfm_scores.csv."""
+        if not DatasetService.get_dataset_by_id(db, dataset_id):
+            return None
+        scores_file = os.path.join(settings.processed_data_path, 'rfm_scores.csv')
+        if not os.path.exists(scores_file):
+            return None
+        try:
+            import pandas as pd
+            df = pd.read_csv(scores_file)
+            if limit:
+                df = df.head(limit)
+            return df.to_dict('records')
+        except Exception:
+            return None
+
+    @staticmethod
+    def get_rfm_scoring_summary(
+        db: Session,
+        dataset_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """Return rfm_scoring_summary.json metadata if available."""
+        if not DatasetService.get_dataset_by_id(db, dataset_id):
+            return None
+        summary_file = os.path.join(settings.processed_data_path, 'rfm_scoring_summary.json')
+        if os.path.exists(summary_file):
+            with open(summary_file, 'r') as f:
+                return json.load(f)
+        return None
