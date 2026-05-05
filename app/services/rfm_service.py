@@ -285,9 +285,9 @@ class RFMService:
                 RFMService._update_job_status(db, job_id, JobStatus.IN_PROGRESS, 10, "Building RFM base...")
 
             success, message, summary = run_build_rfm_base(
-                input_file=input_file,
-                output_dir=output_dir,
+                cleaned_file=input_file,
                 recency_file=recency_file,
+                output_dir=output_dir,
                 save_summary=True
             )
 
