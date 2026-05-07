@@ -460,3 +460,36 @@ async def get_rfm_scoring_summary(
         return {'success': False, 'message': 'No scoring summary found. Please run score-rfm first.'}
 
     return {'success': True, 'message': 'RFM scoring summary retrieved', 'data': metadata}
+
+
+@router.get(
+    "/score-distribution/{dataset_id}",
+    summary="Get RFM score distribution counts",
+    description="Fetch per-score counts for R, F, M dimensions and combined rfm_score"
+)
+async def get_score_distribution(
+    dataset_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get score distribution counts for each RFM dimension.
+
+    - **dataset_id**: ID of the dataset
+    """
+    dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Dataset with ID {dataset_id} not found")
+
+    distribution = RFMService.get_score_distribution(db, dataset_id)
+    if not distribution:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No RFM scores found. Please run score-rfm first."
+        )
+
+    return {
+        'success': True,
+        'message': 'Score distribution retrieved successfully',
+        'data': distribution
+    }

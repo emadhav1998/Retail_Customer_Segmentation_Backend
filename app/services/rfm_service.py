@@ -413,3 +413,50 @@ class RFMService:
             with open(summary_file, 'r') as f:
                 return json.load(f)
         return None
+
+    @staticmethod
+    def get_score_distribution(
+        db: Session,
+        dataset_id: int
+    ) -> Optional[Dict[str, Any]]:
+        """
+        Return score distribution counts for each R, F, M dimension
+        and the combined rfm_score.
+
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset
+
+        Returns:
+            Dictionary with distribution counts or None
+        """
+        if not DatasetService.get_dataset_by_id(db, dataset_id):
+            return None
+
+        scores_file = os.path.join(settings.processed_data_path, 'rfm_scores.csv')
+        if not os.path.exists(scores_file):
+            return None
+
+        try:
+            import pandas as pd
+            df = pd.read_csv(scores_file)
+
+            def to_int_keys(d: dict) -> dict:
+                """Convert numpy int keys to plain int for JSON serialisation."""
+                return {int(k): int(v) for k, v in d.items()}
+
+            distribution = {
+                'total_customers': len(df),
+                'recency_score': to_int_keys(df['recency_score'].value_counts().sort_index().to_dict()),
+                'frequency_score': to_int_keys(df['frequency_score'].value_counts().sort_index().to_dict()),
+                'monetary_score': to_int_keys(df['monetary_score'].value_counts().sort_index().to_dict()),
+                'rfm_score_top20': {str(k): int(v) for k, v in df['rfm_score'].value_counts().head(20).to_dict().items()},
+                'rfm_total_stats': {
+                    'min': int(df['rfm_total'].min()),
+                    'max': int(df['rfm_total'].max()),
+                    'mean': round(float(df['rfm_total'].mean()), 2),
+                },
+            }
+            return distribution
+        except Exception:
+            return None
