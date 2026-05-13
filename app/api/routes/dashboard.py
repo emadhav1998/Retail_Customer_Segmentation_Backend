@@ -12,6 +12,7 @@ from app.db.session import get_db
 from app.models.dataset import Dataset
 from app.services.dashboard_service import DashboardService
 from app.services.dataset_service import DatasetService
+from app.schemas.dashboard import DashboardResponse
 
 
 router = APIRouter(prefix="/dashboard", tags=["dashboard"])
@@ -25,7 +26,8 @@ class DashboardRequest(BaseModel):
 @router.get(
     "/overview/{dataset_id}",
     summary="Get dashboard overview",
-    description="Fetch KPI cards and overview metrics"
+    description="Fetch KPI cards and overview metrics",
+    response_model=DashboardResponse
 )
 async def get_dashboard_overview(
     dataset_id: int,
@@ -54,14 +56,16 @@ async def get_dashboard_overview(
     return {
         'success': True,
         'message': 'Dashboard overview retrieved successfully',
-        'data': result['data']
+        'data': result['data'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.get(
     "/kpi-summary/{dataset_id}",
     summary="Get KPI summary",
-    description="Fetch key performance indicator cards"
+    description="Fetch key performance indicator cards",
+    response_model=DashboardResponse
 )
 async def get_kpi_summary(
     dataset_id: int,
@@ -90,14 +94,16 @@ async def get_kpi_summary(
     return {
         'success': True,
         'message': 'KPI summary retrieved successfully',
-        'data': result['data']['kpis']
+        'data': result['data']['kpis'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.get(
     "/revenue-by-segment/{dataset_id}",
     summary="Get revenue by segment",
-    description="Fetch revenue distribution across segments"
+    description="Fetch revenue distribution across segments",
+    response_model=DashboardResponse
 )
 async def get_revenue_by_segment(
     dataset_id: int,
@@ -126,14 +132,16 @@ async def get_revenue_by_segment(
     return {
         'success': True,
         'message': 'Revenue by segment retrieved successfully',
-        'data': result['data']['revenue_by_segment']
+        'data': result['data']['revenue_by_segment'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.get(
     "/segment-share/{dataset_id}",
     summary="Get segment share",
-    description="Fetch segment distribution percentages"
+    description="Fetch segment distribution percentages",
+    response_model=DashboardResponse
 )
 async def get_segment_share(
     dataset_id: int,
@@ -162,14 +170,16 @@ async def get_segment_share(
     return {
         'success': True,
         'message': 'Segment share retrieved successfully',
-        'data': result['data']['segment_share']
+        'data': result['data']['segment_share'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.get(
     "/scatter-data/{dataset_id}",
     summary="Get scatter plot data",
-    description="Fetch frequency vs monetary value scatter data"
+    description="Fetch frequency vs monetary value scatter data",
+    response_model=DashboardResponse
 )
 async def get_scatter_data(
     dataset_id: int,
@@ -198,14 +208,16 @@ async def get_scatter_data(
     return {
         'success': True,
         'message': 'Scatter data retrieved successfully',
-        'data': result['data']['scatter_data']
+        'data': result['data']['scatter_data'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.get(
     "/monthly-trends/{dataset_id}",
     summary="Get monthly trend data",
-    description="Fetch monthly revenue trends by segment"
+    description="Fetch monthly revenue trends by segment",
+    response_model=DashboardResponse
 )
 async def get_monthly_trends(
     dataset_id: int,
@@ -234,14 +246,16 @@ async def get_monthly_trends(
     return {
         'success': True,
         'message': 'Monthly trends retrieved successfully',
-        'data': result['data']['monthly_trends']
+        'data': result['data']['monthly_trends'],
+        'timestamp': datetime.utcnow().isoformat()
     }
 
 
 @router.post(
     "/full-dashboard/{dataset_id}",
     summary="Get complete dashboard",
-    description="Fetch all dashboard sections at once"
+    description="Fetch all dashboard sections at once",
+    response_model=DashboardResponse
 )
 async def get_full_dashboard(
     dataset_id: int,
@@ -270,5 +284,6 @@ async def get_full_dashboard(
     return {
         'success': True,
         'message': 'Full dashboard retrieved successfully',
-        'data': result['data']
+        'data': result['data'],
+        'timestamp': datetime.utcnow().isoformat()
     }

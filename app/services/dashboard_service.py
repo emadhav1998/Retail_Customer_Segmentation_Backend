@@ -30,7 +30,7 @@ class DashboardService:
     @staticmethod
     def prepare_kpi_cards(df: pd.DataFrame) -> Dict[str, Any]:
         """
-        Prepare KPI card data for dashboard header.
+        Prepare KPI card data for dashboard header with comprehensive aggregation.
 
         Args:
             df: DataFrame with customer segments
@@ -39,30 +39,93 @@ class DashboardService:
             Dictionary with KPI metrics
         """
         if df is None or df.empty:
-            return {}
+            return {
+                'total_customers': 0,
+                'total_revenue': 0.0,
+                'avg_customer_value': 0.0,
+                'healthy_percentage': 0.0,
+                'at_risk_percentage': 0.0,
+                'new_customers': 0,
+                'metric_cards': []
+            }
 
         try:
+            # Validate required columns
+            if 'monetary' not in df.columns or 'segment' not in df.columns:
+                raise ValueError("Missing required columns: monetary, segment")
+
+            # Core aggregations
             total_customers = len(df)
-            total_revenue = float(df['monetary'].sum()) if 'monetary' in df.columns else 0
-            avg_customer_value = total_revenue / total_customers if total_customers > 0 else 0
+            total_revenue = float(df['monetary'].sum())
+            avg_customer_value = total_revenue / total_customers if total_customers > 0 else 0.0
             
-            # Calculate segment distribution
+            # Segment-based calculations
             segment_counts = df['segment'].value_counts()
             
-            # High Value and Loyal are "healthy" customers
-            healthy_customers = (
-                segment_counts.get('High Value', 0) + 
-                segment_counts.get('Loyal', 0)
-            )
-            health_percentage = (healthy_customers / total_customers * 100) if total_customers > 0 else 0
+            # Healthy customers: High Value + Loyal (predictable, stable revenue)
+            healthy_segments = ['High Value', 'Loyal']
+            healthy_customers = sum(segment_counts.get(seg, 0) for seg in healthy_segments)
+            health_percentage = (healthy_customers / total_customers * 100) if total_customers > 0 else 0.0
             
-            # At Risk represents risk
+            # At Risk customers: potential churn risk
             at_risk_count = segment_counts.get('At Risk', 0)
-            at_risk_percentage = (at_risk_count / total_customers * 100) if total_customers > 0 else 0
-
-            # New represents growth potential
+            at_risk_percentage = (at_risk_count / total_customers * 100) if total_customers > 0 else 0.0
+            
+            # New customers: growth potential
             new_count = segment_counts.get('New', 0)
             
+            # Low engagement: recovery potential
+            low_engagement_count = segment_counts.get('Low Engagement', 0)
+            
+            # Calculate revenue metrics by segment
+            if 'segment' in df.columns:
+                segment_revenue = df.groupby('segment')['monetary'].sum()
+                high_value_revenue = segment_revenue.get('High Value', 0)
+                high_value_percentage = (high_value_revenue / total_revenue * 100) if total_revenue > 0 else 0.0
+            else:
+                high_value_percentage = 0.0
+            
+            # Recency-based metrics (if available)
+            if 'recency' in df.columns:
+                avg_recency = float(df['recency'].mean())
+                max_recency = int(df['recency'].max())
+            else:
+                avg_recency = 0.0
+                max_recency = 0
+
+            metric_cards = [
+                {
+                    'label': 'Total Customers',
+                    'value': f"{total_customers:,}",
+                    'icon': 'users',
+                    'color': 'blue'
+                },
+                {
+                    'label': 'Total Revenue',
+                    'value': f"${total_revenue:,.0f}",
+                    'icon': 'dollar-sign',
+                    'color': 'green'
+                },
+                {
+                    'label': 'Avg Customer Value',
+                    'value': f"${avg_customer_value:,.0f}",
+                    'icon': 'trending-up',
+                    'color': 'purple'
+                },
+                {
+                    'label': 'Healthy %',
+                    'value': f"{health_percentage:.1f}%",
+                    'icon': 'heart',
+                    'color': 'emerald'
+                },
+                {
+                    'label': 'At Risk %',
+                    'value': f"{at_risk_percentage:.1f}%",
+                    'icon': 'alert-circle',
+                    'color': 'red'
+                }
+            ]
+
             return {
                 'total_customers': int(total_customers),
                 'total_revenue': round(total_revenue, 2),
@@ -70,41 +133,24 @@ class DashboardService:
                 'healthy_percentage': round(health_percentage, 1),
                 'at_risk_percentage': round(at_risk_percentage, 1),
                 'new_customers': int(new_count),
-                'metric_cards': [
-                    {
-                        'label': 'Total Customers',
-                        'value': int(total_customers),
-                        'icon': 'users',
-                        'color': 'blue'
-                    },
-                    {
-                        'label': 'Total Revenue',
-                        'value': f"${total_revenue:,.0f}",
-                        'icon': 'dollar-sign',
-                        'color': 'green'
-                    },
-                    {
-                        'label': 'Avg Customer Value',
-                        'value': f"${avg_customer_value:,.0f}",
-                        'icon': 'trending-up',
-                        'color': 'purple'
-                    },
-                    {
-                        'label': 'Healthy %',
-                        'value': f"{health_percentage:.1f}%",
-                        'icon': 'heart',
-                        'color': 'green'
-                    },
-                    {
-                        'label': 'At Risk %',
-                        'value': f"{at_risk_percentage:.1f}%",
-                        'icon': 'alert-circle',
-                        'color': 'red'
-                    }
-                ]
+                'low_engagement_customers': int(low_engagement_count),
+                'high_value_revenue_percentage': round(high_value_percentage, 1),
+                'avg_recency_days': round(avg_recency, 1),
+                'max_recency_days': max_recency,
+                'metric_cards': metric_cards
             }
-        except Exception:
-            return {}
+        except Exception as e:
+            # Return empty KPIs on error rather than crashing
+            return {
+                'total_customers': 0,
+                'total_revenue': 0.0,
+                'avg_customer_value': 0.0,
+                'healthy_percentage': 0.0,
+                'at_risk_percentage': 0.0,
+                'new_customers': 0,
+                'metric_cards': [],
+                'error': str(e)
+            }
 
     @staticmethod
     def prepare_revenue_by_segment(df: pd.DataFrame) -> Dict[str, Any]:
