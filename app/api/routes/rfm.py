@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
+import os
 
 from app.db.session import get_db
 from app.models.dataset import Dataset
@@ -493,3 +494,125 @@ async def get_score_distribution(
         'message': 'Score distribution retrieved successfully',
         'data': distribution
     }
+
+
+@router.post(
+    "/segment-customers",
+    summary="Create customer segment mapping",
+    description="Map RFM scores to business segments (High Value, Loyal, New, At Risk, Low Engagement)"
+)
+async def segment_customers(
+    dataset_id: int = Query(..., description="ID of the dataset"),
+    db: Session = Depends(get_db)
+):
+    """
+    Create customer segment mapping from RFM scores.
+
+    - **dataset_id**: ID of the dataset
+    """
+    # Get dataset
+    dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Dataset with ID {dataset_id} not found")
+
+    # Create job
+    job = Job(
+        name=f"segment_mapping_{dataset_id}",
+        stage=JobStage.SEGMENT_MAPPING,
+        status=JobStatus.PENDING,
+        dataset_id=dataset_id
+    )
+    db.add(job)
+    db.commit()
+    db.refresh(job)
+
+    # Generate segments
+    success, message, summary = RFMService.generate_segments(db, dataset_id, job.id)
+
+    if not success:
+        return {
+            'success': False,
+            'message': message,
+            'job_id': job.id,
+            'error': message
+        }, 400
+
+    return {
+        'success': True,
+        'message': message,
+        'job_id': job.id,
+        'data': summary
+    }
+
+
+@router.get(
+    "/segment-summary/{dataset_id}",
+    summary="Get segment summary statistics",
+    description="Fetch segment counts, revenue contribution, and detailed metrics"
+)
+async def get_segment_summary(
+    dataset_id: int,
+    db: Session = Depends(get_db)
+):
+    """
+    Get segment summary with counts, revenue contribution, and metrics.
+
+    - **dataset_id**: ID of the dataset
+    """
+    dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+    if not dataset:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND,
+                            detail=f"Dataset with ID {dataset_id} not found")
+
+    # Get segment file
+    output_dir = settings.processed_data_path
+    segment_file = os.path.join(output_dir, 'customer_segments.csv')
+
+    if not os.path.exists(segment_file):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No segments found. Please run segment-customers first."
+        )
+
+    try:
+        import pandas as pd
+        df = pd.read_csv(segment_file, encoding='utf-8')
+
+        # Calculate segment metrics
+        segment_counts = df['segment'].value_counts().to_dict()
+        total_customers = len(df)
+        total_revenue = df['monetary'].sum() if 'monetary' in df.columns else 0
+
+        # Revenue contribution by segment
+        revenue_by_segment = {}
+        for segment in df['segment'].unique():
+            segment_data = df[df['segment'] == segment]
+            revenue = segment_data['monetary'].sum() if 'monetary' in df.columns else 0
+            percentage = (revenue / total_revenue * 100) if total_revenue > 0 else 0
+            revenue_by_segment[segment] = {
+                'total_revenue': round(revenue, 2),
+                'percentage': round(percentage, 2),
+                'customer_count': len(segment_data),
+                'avg_monetary': round(segment_data['monetary'].mean(), 2) if 'monetary' in df.columns else 0,
+                'avg_recency': round(segment_data['recency'].mean(), 2) if 'recency' in df.columns else 0,
+                'avg_frequency': round(segment_data['frequency'].mean(), 2) if 'frequency' in df.columns else 0
+            }
+
+        return {
+            'success': True,
+            'message': 'Segment summary retrieved successfully',
+            'data': {
+                'total_customers': total_customers,
+                'total_revenue': round(total_revenue, 2),
+                'segment_counts': segment_counts,
+                'revenue_by_segment': revenue_by_segment,
+                'timestamp': datetime.utcnow().isoformat()
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error reading segment data: {str(e)}"
+        )

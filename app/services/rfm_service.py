@@ -460,3 +460,88 @@ class RFMService:
             return distribution
         except Exception:
             return None
+
+    @staticmethod
+    def generate_segments(
+        db: Session,
+        dataset_id: int,
+        job_id: Optional[int] = None
+    ) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+        """
+        Generate business segment mapping from RFM scores.
+        
+        Args:
+            db: Database session
+            dataset_id: ID of the dataset
+            job_id: Optional job ID for tracking
+            
+        Returns:
+            Tuple of (success, message, summary_dict)
+        """
+        # Get dataset
+        dataset = DatasetService.get_dataset_by_id(db, dataset_id)
+        
+        if not dataset:
+            return False, f"Dataset with ID {dataset_id} not found", None
+        
+        # Update job status if provided
+        if job_id:
+            job = db.query(Job).filter(Job.id == job_id).first()
+            if job:
+                job.status = JobStatus.IN_PROGRESS
+                job.stage = JobStage.SEGMENT_MAPPING
+                db.commit()
+        
+        try:
+            # Import the segment mapping function
+            from scripts.segmentation.segment_mapping import run_segment_mapping
+            
+            output_dir = settings.processed_data_path
+            rfm_scores_file = os.path.join(output_dir, 'rfm_scores.csv')
+            
+            if not os.path.exists(rfm_scores_file):
+                return False, f"RFM scores file not found. Please complete RFM scoring first.", None
+            
+            # Run segment mapping
+            success, message, summary = run_segment_mapping(rfm_scores_file, output_dir)
+            
+            if not success:
+                if job_id:
+                    job = db.query(Job).filter(Job.id == job_id).first()
+                    if job:
+                        job.status = JobStatus.FAILED
+                        job.error_message = message
+                        db.commit()
+                return False, message, None
+            
+            # Update job status to completed
+            if job_id:
+                job = db.query(Job).filter(Job.id == job_id).first()
+                if job:
+                    job.status = JobStatus.COMPLETED
+                    job.completed_at = datetime.utcnow()
+                    db.commit()
+            
+            # Extract segment summary from the run output
+            segment_summary = summary.get('segment_summary', {})
+            
+            return True, message, {
+                'segment_counts': segment_summary.get('segment_counts', {}),
+                'revenue_contribution': {
+                    seg: metrics.get('revenue_percentage', 0)
+                    for seg, metrics in segment_summary.get('segment_metrics', {}).items()
+                },
+                'segment_metrics': segment_summary.get('segment_metrics', {}),
+                'segment_ranking': segment_summary.get('segment_ranking', {}),
+                'timestamp': datetime.utcnow().isoformat()
+            }
+            
+        except Exception as e:
+            error_msg = f"Error during segment generation: {str(e)}"
+            if job_id:
+                job = db.query(Job).filter(Job.id == job_id).first()
+                if job:
+                    job.status = JobStatus.FAILED
+                    job.error_message = error_msg
+                    db.commit()
+            return False, error_msg, None
