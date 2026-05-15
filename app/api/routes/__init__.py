@@ -8,6 +8,20 @@ from .segmentation import router as segmentation_router
 from .clustering import router as clustering_router
 from .dashboard import router as dashboard_router
 from .insights import router as insights_router
+from .ai_summary import router as ai_summary_router
+
+__all__ = [
+    "health_router",
+    "dataset_router",
+    "exploration_router",
+    "cleaning_router",
+    "rfm_router",
+    "segmentation_router",
+    "clustering_router",
+    "dashboard_router",
+    "insights_router",
+    "ai_summary_router"
+]
 
 __all__ = [
     "health_router",

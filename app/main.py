@@ -13,7 +13,8 @@ from app.api.routes import (
     segmentation_router,
     clustering_router,
     dashboard_router,
-    insights_router
+    insights_router,
+    ai_summary_router
 )
 
 
@@ -46,6 +47,7 @@ app.include_router(segmentation_router, prefix=settings.api_v1_prefix)
 app.include_router(clustering_router, prefix=settings.api_v1_prefix)
 app.include_router(dashboard_router, prefix=settings.api_v1_prefix)
 app.include_router(insights_router, prefix=settings.api_v1_prefix)
+app.include_router(ai_summary_router, prefix=settings.api_v1_prefix)
 
 
 # Root endpoint
