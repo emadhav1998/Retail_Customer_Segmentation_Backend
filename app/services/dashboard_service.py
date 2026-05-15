@@ -402,13 +402,71 @@ class DashboardService:
             return {}
 
     @staticmethod
-    def get_dashboard_data(db: Session, dataset_id: int) -> Dict[str, Any]:
+    def apply_filters(
+        df: pd.DataFrame,
+        segments: Optional[List[str]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> pd.DataFrame:
         """
-        Get complete dashboard data.
+        Apply segment and date filters to the dataframe before aggregation.
+
+        Args:
+            df: DataFrame with customer segments
+            segments: Optional list of segment names to include
+            date_from: Optional start date string (YYYY-MM-DD)
+            date_to: Optional end date string (YYYY-MM-DD)
+
+        Returns:
+            Filtered DataFrame
+        """
+        filtered = df.copy()
+
+        # Filter by segment names
+        if segments and len(segments) > 0:
+            valid_segments = [s.strip() for s in segments if s.strip()]
+            if valid_segments:
+                filtered = filtered[filtered['segment'].isin(valid_segments)]
+
+        # Filter by date range (requires invoicedate or similar date column)
+        date_col = None
+        for col in ['invoicedate', 'invoice_date', 'date', 'order_date']:
+            if col in filtered.columns:
+                date_col = col
+                break
+
+        if date_col and (date_from or date_to):
+            filtered[date_col] = pd.to_datetime(filtered[date_col], errors='coerce')
+            if date_from:
+                try:
+                    filtered = filtered[filtered[date_col] >= pd.Timestamp(date_from)]
+                except Exception:
+                    pass
+            if date_to:
+                try:
+                    filtered = filtered[filtered[date_col] <= pd.Timestamp(date_to)]
+                except Exception:
+                    pass
+
+        return filtered
+
+    @staticmethod
+    def get_dashboard_data(
+        db: Session,
+        dataset_id: int,
+        segments: Optional[List[str]] = None,
+        date_from: Optional[str] = None,
+        date_to: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Get complete dashboard data with optional filters.
 
         Args:
             db: Database session
             dataset_id: ID of the dataset
+            segments: Optional list of segments to include
+            date_from: Optional start date (YYYY-MM-DD)
+            date_to: Optional end date (YYYY-MM-DD)
 
         Returns:
             Dictionary with all dashboard sections
@@ -423,12 +481,30 @@ class DashboardService:
                 'data': None
             }
 
+        # Apply filters before aggregation
+        filters_applied = bool(segments or date_from or date_to)
+        if filters_applied:
+            df = DashboardService.apply_filters(df, segments=segments, date_from=date_from, date_to=date_to)
+
+        if df.empty:
+            return {
+                'success': False,
+                'message': 'No data matches the specified filters.',
+                'data': None
+            }
+
         try:
             return {
                 'success': True,
                 'message': 'Dashboard data prepared successfully',
                 'data': {
                     'timestamp': datetime.utcnow().isoformat(),
+                    'filters_applied': filters_applied,
+                    'active_filters': {
+                        'segments': segments or [],
+                        'date_from': date_from,
+                        'date_to': date_to
+                    },
                     'kpis': DashboardService.prepare_kpi_cards(df),
                     'revenue_by_segment': DashboardService.prepare_revenue_by_segment(df),
                     'segment_share': DashboardService.prepare_segment_share(df),
